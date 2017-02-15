@@ -1,4 +1,4 @@
-// vim:ts=4 background=light
+// vim:ts=8 background=light
 #include "mbed.h"
 #include "ArduinoMotorShield.hpp"
 
@@ -12,9 +12,9 @@
 typedef int(*CMD_PTR_T)(const char *);
 
 typedef struct {
-	char cmd_name[CMD_NAME_LEN];
-	CMD_PTR_T cmd;
-	char help[CMD_HELP_LEN];
+    char cmd_name[CMD_NAME_LEN];
+    CMD_PTR_T cmd;
+    char help[CMD_HELP_LEN];
 } CMD_TABLE_ENTRY;
 
 /****************************************************************************
@@ -22,23 +22,23 @@ typedef struct {
  ***************************************************************************/
 typedef enum 
 {
-	MOTOR_FWD, 
-	MOTOR_REV,
+    MOTOR_FWD, 
+    MOTOR_REV,
 } MOTOR_DIRECTION;
 
 typedef enum
 {
-	MOTOR_STOPPED,
-	MOTOR_STARTING,
-	MOTOR_SPEEDUP,
-	MOTOR_RUNNING,
-	MOTOR_SLOWDOWN,
+    MOTOR_STOPPED,
+    MOTOR_STARTING,
+    MOTOR_SPEEDUP,
+    MOTOR_RUNNING,
+    MOTOR_SLOWDOWN,
 } MOTOR_STATE;
 
 typedef enum
 {
-	LED_OFF = 0,
-	LED_ON  = 1
+    LED_OFF = 0,
+    LED_ON  = 1
 } LED_STATE;
 
 /****************************************************************************
@@ -65,6 +65,7 @@ void led_reset(void);
 /****************************************************************************
  ** user command prototypes
  ****************************************************************************/
+int help(const char *);
 int get_status(const char *);
 int get_pw(const char *);
 int set_pw(const char *);
@@ -78,11 +79,11 @@ int set_direction(const char *);
  ***************************************************************************/
 CMD_TABLE_ENTRY cmd_table[] = 
 {
-	{"pwr?",	&get_pw,		"Print motor power"			},
-	{"pwr",		&set_pw,		"Set motor power"			},
-	{"dir?",	&get_direction,	"Print motor direction",	},
-	{"dir",		&set_direction,	"Set motor direction",		},
-	{"help",	NULL, 			"Print some nice help"		},
+    {"pwr?",	&get_pw,	"Print motor power"		},
+    {"pwr",		&set_pw,	"Set motor power"		},
+    {"dir?",	&get_direction,	"Print motor direction",	},
+    {"dir",		&set_direction,	"Set motor direction",		},
+    {"help",	&help, 		"Print some nice help"		},
 };
 
 const int n_cmds = sizeof(cmd_table)/sizeof(CMD_TABLE_ENTRY);
@@ -100,8 +101,8 @@ static MOTOR_STATE	motor_state	= MOTOR_STOPPED;
 static uint32_t		counts		= 0;
 
 /*
-*************
-*/
+ *************
+ */
 int main()
 {
     char cmd[CMD_NAME_LEN];
@@ -116,28 +117,30 @@ int main()
     sp.baud(9600);
     sp.printf("AVC Test Device Ready\n");
 
-	ticker.attach(led1_blink, 250);
+    Ticker ticker2;
+    ticker2.attach(led2_blink, .250);
+    ticker.attach(led1_blink, .250);
 
     ams.SetMotorPolarity(ArduinoMotorShield::MOTOR_A, ArduinoMotorShield::MOTOR_FORWARD);
     ams.SetMotorPower(ArduinoMotorShield::MOTOR_A, motor_power);
 
-	while(true) 
+    while(true) 
+    {
+	if(gets(rx_buf) != NULL)
 	{
-		if(gets(rx_buf) != NULL)
+	    int fields = sscanf(rx_buf, "%s %s", cmd, arg);
+	    for(int i = 0; i < n_cmds; ++i)
+	    {
+		if(strncmp(cmd, cmd_table[i].cmd_name, strlen(cmd_table[i].cmd_name)) == 0)
 		{
-			int fields = sscanf(rx_buf, "%s %s", cmd, arg);
-			for(int i = 0; i < n_cmds; ++i)
-			{
-				if(strncmp(cmd, cmd_table[i].cmd_name, strlen(cmd_table[i].cmd_name)) == 0)
-				{
-					cmd_table[i].cmd(arg);
-					break;
-				}
-			}
-			memset(rx_buf, 0, sizeof(rx_buf));
-			fields = 0;
+		    cmd_table[i].cmd(arg);
+		    break;
 		}
+	    }
+	    memset(rx_buf, 0, sizeof(rx_buf));
+	    fields = 0;
 	}
+    }
 }
 
 
@@ -146,8 +149,8 @@ int main()
  */
 int get_pw(const char *)
 {
-	printf("pwr = %d\n", motor_power);
-	return(0);
+    printf("pwr = %d\n", motor_power);
+    return(0);
 }
 
 /*
@@ -155,12 +158,12 @@ int get_pw(const char *)
  */
 int set_pw(const char *arg)
 {
-	int pw_val = 0;
-	pw_val = atoi(arg);
-	printf("setting pwr = %d\n", pw_val);
-	motor_power = pw_val;
-	ams.SetMotorPower(ArduinoMotorShield::MOTOR_A, (motor_power/100.0f));
-	return(0);
+    int pw_val = 0;
+    pw_val = atoi(arg);
+    printf("setting pwr = %d\n", pw_val);
+    motor_power = pw_val;
+    ams.SetMotorPower(ArduinoMotorShield::MOTOR_A, (motor_power/100.0f));
+    return(0);
 }
 
 /*
@@ -168,22 +171,22 @@ int set_pw(const char *arg)
  */
 int get_direction(const char *arg)
 {
-	char *msg;
+    char *msg;
 
-	switch(motor_dir)
-	{
-		case MOTOR_FWD:
-			msg = "fwd";
-			break;
-		case MOTOR_REV:
-			msg = "rev";
-			break;
-		default:
-			msg = "invalid";
-			break;
-	}
-	printf("dir = %s\n", msg);
-	return(0);
+    switch(motor_dir)
+    {
+	case MOTOR_FWD:
+	    msg = "fwd";
+	    break;
+	case MOTOR_REV:
+	    msg = "rev";
+	    break;
+	default:
+	    msg = "invalid";
+	    break;
+    }
+    printf("dir = %s\n", msg);
+    return(0);
 }
 
 
@@ -192,37 +195,37 @@ int get_direction(const char *arg)
  */
 int set_direction(const char *arg)
 {
-	MOTOR_DIRECTION dir;
+    MOTOR_DIRECTION dir;
 
-	if(strcmp(arg, "fwd") == 0)
-	{
-		dir = MOTOR_FWD;
-	}
-	else if(strcmp(arg, "rev") == 0)
-	{
-		dir = MOTOR_REV;
-	}
-	else
-	{
-		return(-1);
-	}
+    if(strcmp(arg, "fwd") == 0)
+    {
+	dir = MOTOR_FWD;
+    }
+    else if(strcmp(arg, "rev") == 0)
+    {
+	dir = MOTOR_REV;
+    }
+    else
+    {
+	return(-1);
+    }
 
-	if(motor_dir != dir)
-	{
-		/* changing direction => stop motor first */
-		ams.SetMotorPower(ArduinoMotorShield::MOTOR_A, 0.0f);
-	}
-	/* set motor to new direction */
-	motor_dir = dir;
-	ams.SetMotorPolarity(ArduinoMotorShield::MOTOR_A, (ArduinoMotorShield::MotorDirection_e)dir);
-	ams.SetMotorPower(ArduinoMotorShield::MOTOR_A, (motor_power / 100.0f));
-	printf("Setting motor direction to %d\n", dir);
-	return(0);
+    if(motor_dir != dir)
+    {
+	/* changing direction => stop motor first */
+	ams.SetMotorPower(ArduinoMotorShield::MOTOR_A, 0.0f);
+    }
+    /* set motor to new direction */
+    motor_dir = dir;
+    ams.SetMotorPolarity(ArduinoMotorShield::MOTOR_A, (ArduinoMotorShield::MotorDirection_e)dir);
+    ams.SetMotorPower(ArduinoMotorShield::MOTOR_A, (motor_power / 100.0f));
+    printf("Setting motor direction to %d\n", dir);
+    return(0);
 }
 
 /*
-** ISR to capture count -- called on rising edge of detect
-*/
+ ** ISR to capture count -- called on rising edge of detect
+ */
 void counter_read_reset(void)
 {
     counts = timer.read_ms();
@@ -232,8 +235,8 @@ void counter_read_reset(void)
 }
 
 /*
-** ISR to clear led -- called on falling edge of detect
-*/
+ ** ISR to clear led -- called on falling edge of detect
+ */
 void led_reset(void)
 {
     led1 = LED_OFF;
@@ -241,10 +244,20 @@ void led_reset(void)
 
 void led1_blink(void)
 {
-	led1 = !led1;
+    led1 = !led1;
 }
 
 void led2_blink(void)
 {
-	led2 = !led2;
+    led2 = !led2;
+}
+
+
+
+int help(const char *arg)
+{
+    for(int i = 0; i < n_cmds; ++i)
+    {
+	printf("%s: %s\n", cmd_table[i].cmd_name, cmd_table[i].help);
+    }
 }
