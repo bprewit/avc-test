@@ -34,12 +34,20 @@ typedef enum
     MOTOR_SLOWDOWN,
 } MOTOR_STATE;
 
+typedef enum
+{
+    LED_OFF = 0,
+    LED_ON  = 1
+} LED_STATE;
+
 /****************************************************************************
  ** class instantiations 
  ****************************************************************************/
-DigitalOut		led(LED2);
-Timer			tmr;
-Ticker			tkr;
+DigitalOut		led2(LED2);
+DigitalOut		led1(D7);
+InterruptIn		event(D6);
+Timer			timer;
+Ticker			ticker;
 Serial 			sp(USBTX, USBRX);
 ArduinoMotorShield	ams;
 
@@ -48,7 +56,9 @@ ArduinoMotorShield	ams;
 /****************************************************************************
  ** function prototypes 
  ****************************************************************************/
-void blink(void);
+void led_blink(void);
+void counter_read_reset(void);
+void led_reset(void);
 
 /****************************************************************************
  ** user command prototypes
@@ -64,12 +74,13 @@ int set_direction(const char *);
 /****************************************************************************
  ** command table setup
  ***************************************************************************/
-CMD_TABLE_ENTRY cmd_table[] = {
-    {"pwr?", &get_pw,		"Print motor power"		},
-    {"pwr=", &set_pw,		"Set motor power"		},
-    {"dir?", &get_direction,	"Print motor direction",	},
-    {"dir=", &set_direction,	"Set motor direction",		},
-    {"help", NULL, 		"Print some nice help"		},
+CMD_TABLE_ENTRY cmd_table[] = 
+{
+    {"pwr?",	&get_pw,	"Print motor power"		},
+    {"pwr",	&set_pw,	"Set motor power"		},
+    {"dir?",	&get_direction,	"Print motor direction",	},
+    {"dir",	&set_direction,	"Set motor direction",		},
+    {"help",	NULL, 		"Print some nice help"		},
 };
 
 const int n_cmds = sizeof(cmd_table)/sizeof(CMD_TABLE_ENTRY);
@@ -84,6 +95,8 @@ static int		motor_power	= 0;
 static MOTOR_DIRECTION	motor_dir	= MOTOR_FWD;
 static MOTOR_STATE	motor_state	= MOTOR_STOPPED;
 
+static uint32_t		counts		= 0;
+
 /*
 *************
 */
@@ -92,15 +105,20 @@ int main()
     char cmd[CMD_NAME_LEN];
     char arg[CMD_ARG_LEN];
 
-    sp.baud(115200);
-    sp.printf("AVC Test Device Operational\n");
+    led1 = LED_ON;
 
-    tkr.attach(blink, 0.250);
+    timer.start();
+    event.rise(counter_read_reset);
+    event.fall(led_reset);
+
+    sp.baud(115200);
+    sp.printf("AVC Test Device Ready\n");
 
     ams.SetMotorPolarity(ArduinoMotorShield::MOTOR_A, ArduinoMotorShield::MOTOR_FORWARD);
     ams.SetMotorPower(ArduinoMotorShield::MOTOR_A, motor_power);
 
-    while (true) {
+    while(true) 
+    {
 	if(gets(rx_buf) != NULL)
 	{
 	    int fields = sscanf(rx_buf, "%s %s", cmd, arg);
@@ -109,28 +127,22 @@ int main()
 		if(strncmp(cmd, cmd_table[i].cmd_name, strlen(cmd_table[i].cmd_name)) == 0)
 		{
 		    cmd_table[i].cmd(arg);
+		    break;
 		}
 	    }
-	    fields = 0;
 	    memset(rx_buf, 0, sizeof(rx_buf));
+	    fields = 0;
 	}
     }
 }
 
-/*
-** blink led -- called from timer interrupt
-*/
-void blink(void)
-{
-    led = !led;
-}
 
 /*
 ** fetch pulse width
 */
 int get_pw(const char *)
 {
-    printf("pw = %d\n", motor_power);
+    printf("pwr = %d\n", motor_power);
     return(0);
 }
 
@@ -172,7 +184,7 @@ int get_direction(const char *arg)
 
 
 /*
-**
+** set motor direction
 */
 int set_direction(const char *arg)
 {
@@ -193,7 +205,7 @@ int set_direction(const char *arg)
 
     if(motor_dir != dir)
     {
-	/* stop motor first */
+	/* changing direction => stop motor first */
 	ams.SetMotorPower(ArduinoMotorShield::MOTOR_A, 0.0f);
     }
     /* set motor to new direction */
@@ -202,4 +214,23 @@ int set_direction(const char *arg)
     ams.SetMotorPower(ArduinoMotorShield::MOTOR_A, (motor_power / 100.0f));
     printf("Setting motor direction to %d\n", dir);
     return(0);
+}
+
+/*
+** ISR to capture count -- called on rising edge of detect
+*/
+void counter_read_reset(void)
+{
+    counts = timer.read_ms();
+    printf("counts = %ld\n", counts);
+    timer.reset();
+    led1 = LED_ON;
+}
+
+/*
+** ISR to clear led -- called on falling edge of detect
+*/
+void led_reset(void)
+{
+    led1 = LED_OFF;
 }
