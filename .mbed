@@ -1,2 +1,4 @@
 TOOLCHAIN=GCC_ARM
+TARGET=NUCLEO_F401RE
+GCC_ARM_PATH=/usr/local/gcc-arm-none-eabi/bin/
 ROOT=.

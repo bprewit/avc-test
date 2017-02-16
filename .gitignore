@@ -2,3 +2,4 @@ mbed-os/
 BUILD/
 ArduinoMotorShield/
 *.lib
+.mbed

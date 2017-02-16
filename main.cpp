@@ -73,6 +73,7 @@ int get_speed(const char *);
 int set_speed(const char *);
 int get_direction(const char *);
 int set_direction(const char *);
+int read_speed(const char *);
 
 /****************************************************************************
  ** command table setup
@@ -80,9 +81,10 @@ int set_direction(const char *);
 CMD_TABLE_ENTRY cmd_table[] = 
 {
     {"pwr?",	&get_pw,	"Print motor power"		},
-    {"pwr",		&set_pw,	"Set motor power"		},
-    {"dir?",	&get_direction,	"Print motor direction",	},
-    {"dir",		&set_direction,	"Set motor direction",		},
+    {"pwr",	&set_pw,	"Set motor power"		},
+    {"dir?",	&get_direction,	"Print motor direction"		},
+    {"dir",	&set_direction,	"Set motor direction"		},
+    {"spd?",	&read_speed,	"Print motor speed (rpm)"	},
     {"help",	&help, 		"Print some nice help"		},
 };
 
@@ -105,41 +107,53 @@ static uint32_t		counts		= 0;
  */
 int main()
 {
+    char *buf = rx_buf;
     char cmd[CMD_NAME_LEN];
     char arg[CMD_ARG_LEN];
 
     led1 = LED_ON;
 
-    //timer.start();
-    //event.rise(counter_read_reset);
-    //event.fall(led_reset);
+    ticker.attach(led2_blink, .250);
 
-    sp.baud(9600);
-    sp.printf("AVC Test Device Ready\n");
-
-    Ticker ticker2;
-    ticker2.attach(led2_blink, .250);
-    ticker.attach(led1_blink, .250);
+    timer.start();
+    event.rise(counter_read_reset);
+    event.fall(led_reset);
 
     ams.SetMotorPolarity(ArduinoMotorShield::MOTOR_A, ArduinoMotorShield::MOTOR_FORWARD);
     ams.SetMotorPower(ArduinoMotorShield::MOTOR_A, motor_power);
 
+    sp.baud(9600);
+    sp.printf("AVC Test Device Ready\n");
+
+
     while(true) 
     {
-	if(gets(rx_buf) != NULL)
+	for(;;)
 	{
-	    int fields = sscanf(rx_buf, "%s %s", cmd, arg);
-	    for(int i = 0; i < n_cmds; ++i)
+	    if(sp.readable())
 	    {
-		if(strncmp(cmd, cmd_table[i].cmd_name, strlen(cmd_table[i].cmd_name)) == 0)
+		char c = sp.getc();
+		if((c == '\r') || (c == '\n'))
 		{
-		    cmd_table[i].cmd(arg);
+		    *buf = 0;
+		    buf = rx_buf;
+		    sp.putc('\n');
 		    break;
 		}
+		sp.putc(c);
+		*buf++ = c;
 	    }
-	    memset(rx_buf, 0, sizeof(rx_buf));
-	    fields = 0;
 	}
+	int fields = sscanf(rx_buf, "%s %s", cmd, arg);
+	for(int i = 0; i < n_cmds; ++i)
+	{
+	    if(strncmp(cmd, cmd_table[i].cmd_name, strlen(cmd_table[i].cmd_name)) == 0)
+	    {
+		cmd_table[i].cmd(arg);
+		break;
+	    }
+	}
+	fields = 0;	// just to shut up the doggone compiler
     }
 }
 
@@ -229,7 +243,6 @@ int set_direction(const char *arg)
 void counter_read_reset(void)
 {
     counts = timer.read_ms();
-    printf("counts = %ld\n", counts);
     timer.reset();
     led1 = LED_ON;
 }
@@ -252,7 +265,13 @@ void led2_blink(void)
     led2 = !led2;
 }
 
-
+int read_speed(const char *arg)
+{
+    int rpm = (int)(60 * 1000) / counts;
+    printf("speed = %d\n", rpm);
+    return(0);
+}
+	
 
 int help(const char *arg)
 {
